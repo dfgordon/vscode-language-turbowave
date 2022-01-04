@@ -1,0 +1,51 @@
+{
+	"name": "vscode-language-turbowave",
+	"displayName": "turboWAVE",
+	"description": "Language support for turboWAVE input files",
+	"icon": "logo.png",
+	"version": "0.0.0",
+	"license": "PUBLIC-DOMAIN",
+	"publisher": "dfgordon",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/dfgordon/vscode-language-turbowave"
+	},
+	"engines": {
+		"vscode": "^1.62.0"
+	},
+	"categories": [
+		"Other"
+	],
+	"activationEvents": [
+		"onLanguage:turbowave"
+	],
+	"main": "./out/extension.js",
+	"contributes": {
+		"languages": [
+			{
+				"id": "turbowave",
+				"extensions": [
+					".tw"
+				],
+				"configuration": "./language-configuration.json"
+			}
+		]
+	},
+	"dependencies": {
+		"web-tree-sitter": "^0.19.4"
+	},
+	"scripts": {
+		"vscode:prepublish": "npm run compile",
+		"compile": "tsc -p ./",
+		"lint": "eslint . --ext .ts,.tsx",
+		"watch": "tsc -watch -p ./"
+	},
+	"devDependencies": {
+		"@types/node": "^14.16.0",
+		"@types/vscode": "^1.42.0",
+		"@typescript-eslint/eslint-plugin": "^4.16.0",
+		"@typescript-eslint/parser": "^4.16.0",
+		"eslint": "^7.21.0",
+		"typescript": "^4.4.3"
+	}
+}

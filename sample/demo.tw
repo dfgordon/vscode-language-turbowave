@@ -1,0 +1,27 @@
+steps = 2000
+timestep = 100 [ps]
+dump period = 0
+moving window = no
+neutralize = yes
+unit density = 2.8e+19
+
+new grid
+{
+	corner = ( 0.0, -3.1416 [rad], -0.5 )
+	dimensions = ( 2000, 1, 1 )
+	cell size = ( 0.2 [cm], 6.2832 [rad], 1.0 )
+	decomposition = ( 4, 1, 1 )
+	geometry = cylindrical
+	adaptive timestep = off
+}
+
+new species 'electrons'
+{
+	mass = 1.0
+	charge = -1.0
+}
+
+generate uniform 'electrons'
+{
+	density = 1e16 [/cm3]
+}
