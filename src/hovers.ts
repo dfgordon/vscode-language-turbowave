@@ -1,6 +1,6 @@
-import { IncomingHttpStatusHeader } from 'http2';
 import * as vscode from 'vscode';
 import * as Parser from 'web-tree-sitter';
+import * as lxbase from './langExtBase';
 
 function exampleString(examples: string[]) : vscode.MarkdownString
 {
@@ -9,14 +9,15 @@ function exampleString(examples: string[]) : vscode.MarkdownString
 	return result;
 }
 
-export class TSHoverProvider implements vscode.HoverProvider
+export class TSHoverProvider extends lxbase.LangExtBase implements vscode.HoverProvider
 {
-	parser : Parser;
+	hover : vscode.Hover | undefined;
 	hmap: Map<string,Array<vscode.MarkdownString>>;
+	position = new vscode.Position(0,0);
 
-	constructor(parser: Parser)
+	constructor(TSInitResult: [Parser,Parser.Language])
 	{
-		this.parser = parser;
+		super(TSInitResult);
 		this.hmap = new Map<string,Array<vscode.MarkdownString>>();
 
 		this.hmap.set("dimension",[
@@ -48,50 +49,28 @@ export class TSHoverProvider implements vscode.HoverProvider
 		]);
 
 	}
-	curs_to_range(curs: Parser.TreeCursor): vscode.Range
-	{
-		const start_pos = new vscode.Position(curs.startPosition.row,curs.startPosition.column);
-		const end_pos = new vscode.Position(curs.endPosition.row,curs.endPosition.column);
-		return new vscode.Range(start_pos,end_pos);
-	}	
-	get_hover(hover:Array<vscode.MarkdownString>,curs:Parser.TreeCursor,position:vscode.Position) : boolean
+	visit_node(curs:Parser.TreeCursor) : lxbase.WalkerChoice
 	{
 		const rng = this.curs_to_range(curs);
-		if (rng.contains(position))
+		if (rng.contains(this.position))
 		{
+			const notes = new Array<vscode.MarkdownString>();
 			const temp = this.hmap.get(curs.nodeType);
 			if (temp)
-				temp.forEach(s => hover.push(s));
-			return true;
+				temp.forEach(s => notes.push(s));
+			if (notes.length>0) {
+				this.hover = new vscode.Hover(notes,rng);
+				return lxbase.WalkerOptions.exit;
+			}
 		}
-		return false;
+		return lxbase.WalkerOptions.gotoChild;
 	}
 	provideHover(document:vscode.TextDocument,position: vscode.Position,token: vscode.CancellationToken): vscode.ProviderResult<vscode.Hover>
 	{
-		const hover = new Array<vscode.MarkdownString>();
+		this.position = position;
+		this.hover = undefined;
 		const tree = this.parser.parse(document.getText()+"\n");
-		const cursor = tree.walk();
-		let recurse = true;
-		let finished = false;
-		do
-		{
-			if (recurse && cursor.gotoFirstChild())
-				recurse = this.get_hover(hover,cursor,position);
-			else
-			{
-				if (cursor.gotoNextSibling())
-					recurse = this.get_hover(hover,cursor,position);
-				else if (cursor.gotoParent())
-					recurse = false;
-				else
-					finished = true;
-			}
-			if (hover.length>0)
-				finished = true;
-		} while (!finished);
-		if (hover.length>0)
-			return new vscode.Hover(hover,this.curs_to_range(cursor));
-		else
-			return undefined;
+		this.walk(tree,this.visit_node.bind(this));
+		return this.hover;
 	}
 }

@@ -7,6 +7,7 @@ unit density = 2.8e+19
 
 new grid
 {
+	a = (5.0 [m] , 1 ) 
 	corner = ( 0.0, -3.1416 [rad], -0.5 )
 	dimensions = ( 2000, 1, 1 )
 	cell size = ( 0.2 [cm], 6.2832 [rad], 1.0 )

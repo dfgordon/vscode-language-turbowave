@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as Parser from 'web-tree-sitter';
+import * as lxbase from './langExtBase';
 
 const tokenTypes = [
 	'comment', 'string', 'keyword', 'number', 'regexp', 'operator', 'namespace',
@@ -13,104 +14,81 @@ const tokenModifiers = [
 
 export const legend = new vscode.SemanticTokensLegend(tokenTypes,tokenModifiers);
 
-export class TSSemanticTokensProvider implements vscode.DocumentSemanticTokensProvider
+export class TSSemanticTokensProvider extends lxbase.LangExtBase implements vscode.DocumentSemanticTokensProvider
 {
-	parser : Parser;
-
-	constructor(parser: Parser)
-	{
-		this.parser = parser;
-	}
-	curs_to_range(curs: Parser.TreeCursor): vscode.Range
-	{
-		const start_pos = new vscode.Position(curs.startPosition.row,curs.startPosition.column);
-		const end_pos = new vscode.Position(curs.endPosition.row,curs.endPosition.column);
-		return new vscode.Range(start_pos,end_pos);
-	}	
-	node_to_range(node: Parser.SyntaxNode): vscode.Range
-	{
-		const start_pos = new vscode.Position(node.startPosition.row,node.startPosition.column);
-		const end_pos = new vscode.Position(node.endPosition.row,node.endPosition.column);
-		return new vscode.Range(start_pos,end_pos);
-	}	
-	process_node(builder: vscode.SemanticTokensBuilder,curs: Parser.TreeCursor): boolean
+	builder = new vscode.SemanticTokensBuilder(legend);
+	visit_node(curs: Parser.TreeCursor): lxbase.WalkerChoice
 	{
 		const rng = this.curs_to_range(curs);
 		if (curs.nodeType=="comment")
 		{
-			builder.push(rng,"comment",[]);
-			return false;
+			if (rng.isSingleLine)
+				this.builder.push(rng,"comment");
+			else
+				for (let l=rng.start.line;l<=rng.end.line;l++) {
+					let start = new vscode.Position(l,0);
+					let end = new vscode.Position(l,1000);
+					if (l==rng.start.line)
+						start = rng.start;
+					if (l==rng.end.line)
+						end = rng.end;
+					this.builder.push(new vscode.Range(start,end),"comment");
+				}
+			return lxbase.WalkerOptions.gotoSibling;
 		}
-		if (["#include","#define","#ifdef","#ifndef","#else","#endif"].indexOf(curs.nodeText)>-1)
+		if (["#include","#define","#ifdef","#ifndef","#else","#endif"].includes(curs.nodeText))
 		{
-			builder.push(rng,"keyword",["declaration"]);
-			return false;
+			this.builder.push(rng,"keyword",["declaration"]);
+			return lxbase.WalkerOptions.gotoSibling;
 		}
-		if (["new","associative_new","generate","get"].indexOf(curs.nodeType)>-1)
+		if (["new","associative_new","generate","get","reaction","collision"].includes(curs.nodeType))
 		{
 			const lead_tok = curs.currentNode().firstChild;
 			if (lead_tok)
 			{
-				builder.push(this.node_to_range(lead_tok),"keyword",[]);
+				this.builder.push(this.node_to_range(lead_tok),"keyword");
 				let next_tok = lead_tok.nextSibling;
 				while (next_tok)
 				{
 					if (next_tok.type=="for")
-						builder.push(this.node_to_range(next_tok),"keyword",[]);
+						this.builder.push(this.node_to_range(next_tok),"keyword");
 					next_tok = next_tok.nextSibling;
 				}
 			}
-			return true;
+			return lxbase.WalkerOptions.gotoChild;
 		}
 		if (curs.nodeType=="dimension")
 		{
-			builder.push(rng,"type",[]);
-			return false;
+			this.builder.push(rng,"type");
+			return lxbase.WalkerOptions.gotoSibling;
 		}
 		if (curs.nodeType=="string_literal")
 		{
-			builder.push(rng,"string",[]);
-			return false;
+			this.builder.push(rng,"string");
+			return lxbase.WalkerOptions.gotoSibling;
 		}
 		if (curs.nodeType=="boolean")
 		{
-			builder.push(rng,"variable",["readonly"]);
-			return false;
+			this.builder.push(rng,"variable",["readonly"]);
+			return lxbase.WalkerOptions.gotoSibling;
 		}
-		if (["define_key","define_ref"].indexOf(curs.nodeType)>-1)
+		if (["define_key","define_ref"].includes(curs.nodeType))
 		{
-			builder.push(rng,"variable",[]);
-			return false;
+			this.builder.push(rng,"variable");
+			return lxbase.WalkerOptions.gotoSibling;
 		}
 		if (curs.nodeType=="decimal")
 		{
-			builder.push(rng,"number",[]);
-			return false;
+			this.builder.push(rng,"number");
+			return lxbase.WalkerOptions.gotoSibling;
 		}
-		return true;
+		return lxbase.WalkerOptions.gotoChild;
 	}
 	provideDocumentSemanticTokens(document:vscode.TextDocument): vscode.ProviderResult<vscode.SemanticTokens>
 	{
-		const tokensBuilder = new vscode.SemanticTokensBuilder(legend);
+		this.builder = new vscode.SemanticTokensBuilder(legend);
 		const tree = this.parser.parse(document.getText()+"\n");
-		const cursor = tree.walk();
-		let recurse = true;
-		let finished = false;
-		do
-		{
-			if (recurse && cursor.gotoFirstChild())
-				recurse = this.process_node(tokensBuilder,cursor);
-			else
-			{
-				if (cursor.gotoNextSibling())
-					recurse = this.process_node(tokensBuilder,cursor);
-				else if (cursor.gotoParent())
-					recurse = false;
-				else
-					finished = true;
-			}
-		} while (!finished);
-
-		return tokensBuilder.build();
+		this.walk(tree,this.visit_node.bind(this));
+		return this.builder.build();
 	}
 }
